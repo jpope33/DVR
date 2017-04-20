@@ -58,9 +58,8 @@ public class RouterNode {
 
     public void updateDistanceVectorEntry(String[] newRoutingTableEntry){
 
+        // find table entry with matching destination and replace with newRoutingTableEntry
         String newDestination = newRoutingTableEntry[0];
-        //String newCost = newRoutingTableEntry[1];
-        //String newNextHop = newRoutingTableEntry[2];
 
         for (int i =0; i < routingTable.size(); i++){
             String[] temp = routingTable.get(i);
@@ -75,50 +74,14 @@ public class RouterNode {
 
     public void printNode(){
         System.out.print("Direct Neighbors - ");
-        /*
-        for (int i = 0; i < neighbors.length; i++){
-            System.out.print(neighbors[i] + ", ");
-        }*/
         System.out.println(Arrays.toString(neighbors));
 
         System.out.println("Routing Table:");
-        /*
-        System.out.println("Destination" + "\t" + "Cost" + "\t\t" + "Next Hop");
-        for (int i = 0; i < routingTable.size(); i++){
-            String[] temp = routingTable.get(i);
-            System.out.print(temp[0] + "\t\t" + temp[1] + "\t\t" + temp[2] + "\n");
-        }*/
         System.out.println("[Dest, Cost, Next Hop]");
         for (int i = 0; i < routingTable.size(); i++){
             String[] temp = routingTable.get(i);
             System.out.println(Arrays.toString(temp));
         }
         System.out.println();
-    }
-
-    @Override
-    public String toString() {
-
-        System.out.print("Direct Neighbors: ");
-        /*
-        for (int i = 0; i < neighbors.length; i++){
-            System.out.print(neighbors[i] + ", ");
-        }*/
-        System.out.println(Arrays.toString(neighbors));
-
-        System.out.println("\nRouting Table: ");
-        /*
-        System.out.println("Destination" + "\t" + "Cost" + "\t\t" + "Next Hop");
-        for (int i = 0; i < routingTable.size(); i++){
-            String[] temp = routingTable.get(i);
-            System.out.print(temp[0] + "\t\t" + temp[1] + "\t\t" + temp[2] + "\n");
-        }*/
-        System.out.println("Dest, Cost, Next Hop");
-        for (int i = 0; i < routingTable.size(); i++){
-            String[] temp = routingTable.get(i);
-            System.out.print(Arrays.toString(temp));
-        }
-
-        return null;
     }
 }
