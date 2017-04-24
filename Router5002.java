@@ -1,3 +1,4 @@
+//package DVR;
 
 import java.io.*;
 import java.net.*;
@@ -17,7 +18,7 @@ public class Router5002 {//NEW CLASS CHANGE
     private LinkedList<String[]> routingTable = new LinkedList<>(); // list of routing table entries
     private RouterNode routerNode;// router node object, composed of 'neighbors' array and 'routingTable' LL
 
-    private byte[] reveivedBytes = new byte[1024];
+    //private byte[] reveivedBytes = new byte[1024];
     private DatagramPacket packet;
 
     public static void main(String[] args) {
@@ -105,7 +106,7 @@ public class Router5002 {//NEW CLASS CHANGE
 
         while (true){
             try {
-
+            	byte[] reveivedBytes = new byte[1024];
                 packet = new DatagramPacket(reveivedBytes, reveivedBytes.length);
                 socket.receive(packet);
                 String receivedString = new String(packet.getData());
@@ -117,7 +118,7 @@ public class Router5002 {//NEW CLASS CHANGE
                 String hostPortString = String.valueOf(hostPort);
 
                 //System.out.println("Sender - Host: " + senderPortString + " - " + hostPortString);
-
+                System.out.println("REcieved String : " +receivedString);
                 String[] vectorValue = receivedString.split(",");
                 //System.out.println("vectorValue: " +);
                 // holds only pertinent vector values., i.e. not sender or self
@@ -133,6 +134,7 @@ public class Router5002 {//NEW CLASS CHANGE
                     String[] tempArray = tempString.split(":");
                     String destination = tempArray[0];
                     String cost = tempArray[1];
+                    String nexthop = tempArray[2];
                     //System.out.println("Destination: " + destination);
                     //System.out.println("Cost " + cost);
 
@@ -140,7 +142,7 @@ public class Router5002 {//NEW CLASS CHANGE
                     if (destination.equals(senderPortString) || destination.equals(hostPortString)){
                         System.out.println(" Redundant, Not Added To Lean");
                     }else {
-                        vectorValueLean.add(destination + ":" + cost);
+                        vectorValueLean.add(destination + ":" + cost+":"+nexthop);
                         System.out.println(" Added To Lean");
                     }
                 }
@@ -173,14 +175,17 @@ public class Router5002 {//NEW CLASS CHANGE
                     String[] temp = vectorValueLean.get(i).split(":");
 
                     // this is how 'fast' the host node can get to the sending node
-                    String currentCostToSendingNode = routerNode.getCost(senderPortString);
-
+                    String costAndNextHop = routerNode.getCost(senderPortString);
+                		  
+                    String currentCostToSendingNode = costAndNextHop.split(":")[0];
+                    String currentNexthopToSendingNode = costAndNextHop.split(":")[1];
                     // this is how 'fast' the sending node can get to the destination in question
                     String tempDestination = temp[0];
                     String tempCost = temp[1].trim();
+                    String tempNexHtop = temp[2].trim();
 
                     // this is how 'fast' the host node can currently get to the same destination
-                    String currentCostToTempDestination = routerNode.getCost(tempDestination);
+                    String currentCostToTempDestination = routerNode.getCost(tempDestination).split(":")[0];
 
                     /*
                     If the cost from 5002 to the sending node plus the cost from the sending node to
@@ -195,11 +200,11 @@ public class Router5002 {//NEW CLASS CHANGE
                     int tc = Integer.parseInt(tempCost);
                     int ccttd = Integer.parseInt(currentCostToTempDestination);
 
-                    if (cctsn + tc < ccttd){
+                    if (cctsn + tc <= ccttd){
                         updateNeed = true;
 
                         //update with [tempDestination, cctsn + tc, sendingNode]
-                        String[] newDistanceVectorEntry = {tempDestination, String.valueOf(cctsn+tc), senderPortString};
+                        String[] newDistanceVectorEntry = {tempDestination, String.valueOf(cctsn+tc), currentNexthopToSendingNode};
                         routerNode.updateDistanceVectorEntry(newDistanceVectorEntry);
                     }
                 }
