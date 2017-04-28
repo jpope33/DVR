@@ -1,0 +1,6 @@
+start java Router5004 routingTable5004backup.txt initializele5004backup.txt
+start java Router5002 routingTable5002backup.txt initializele5002backup.txt
+start java Router5003 routingTable5003backup.txt initializele5003backup.txt
+start java Router5005 routingTable5005backup.txt initializele5005backup.txt
+start java Router5006 routingTable5006backup.txt initializele5006backup.txt
+start java Router5001 routingTable5001backup.txt initializele5001backup.txt

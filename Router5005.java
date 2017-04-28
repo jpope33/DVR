@@ -10,13 +10,13 @@ import java.util.TimerTask;
 
 import javax.swing.text.AbstractDocument.Content;
 
-public class Router5001 {
+public class Router5005 {
 
-    private static Router5001 classInstance;
+    private static Router5005 classInstance;
 
     private DatagramSocket socket;
     private InetAddress localhost;
-    private int hostPort = 5001;
+    private int hostPort = 5005;
 
     private static String filename;// reference to routerTable.txt file
     private static String initialFile;
@@ -38,7 +38,7 @@ public class Router5001 {
             System.out.println("Argument Error");
         } else {
         	
-            classInstance = new Router5001();
+            classInstance = new Router5005();
             classInstance.setupConstants(args);
             classInstance.readAndSend(changed, null,null);// initial read and send call
             

@@ -1,4 +1,4 @@
-package DVR.Original;
+//package DVR;
 
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -32,9 +32,9 @@ public class RouterNode {
         for (int i = 0; i < routingTable.size(); i++){
             String[] temp = routingTable.get(i);
             if (i != routingTable.size() - 1){
-                stringBuilder.append(temp[0]+":"+temp[1]+",");
+                stringBuilder.append(temp[0]+":"+temp[1]+":"+temp[2]+",");
             }else {
-                stringBuilder.append(temp[0]+":"+temp[1]);
+                stringBuilder.append(temp[0]+":"+temp[1]+":"+temp[2]);
             }
         }
 
@@ -49,9 +49,9 @@ public class RouterNode {
             String[] temp = routingTable.get(i);
             String destinationTemp = temp[0];
             String costTemp = temp[1];
-
+            String nexthop = temp[2];
             if (destination.equals(destinationTemp)){
-                returnCost = costTemp;
+                returnCost = costTemp+":"+nexthop;
                 break;
             }
         }

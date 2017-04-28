@@ -2,34 +2,89 @@
 
 import java.io.*;
 import java.net.*;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Scanner;
+import java.util.Timer;
+import java.util.TimerTask;
 
-public class Router5002 {//NEW CLASS CHANGE
+import javax.swing.text.AbstractDocument.Content;
+
+public class Router5002 {
 
     private static Router5002 classInstance;
 
     private DatagramSocket socket;
     private InetAddress localhost;
-    private int hostPort = 5002;//NEW CLASS CHANGE
+    private int hostPort = 5002;
 
-    private String filename;
-    private String neighbors[] = null; // array of neighbors
-    private LinkedList<String[]> routingTable = new LinkedList<>(); // list of routing table entries
+    private static String filename;// reference to routerTable.txt file
+    private static String initialFile;
+    //private static String currentFileContent;
+    private static String initialFileContent;
+    private static boolean changed = false;
+    
+    private String neighbors[] = null; // array of neighbor nodes
+    private LinkedList<String[]> routingTable = new LinkedList(); // list of routing table entries
     private RouterNode routerNode;// router node object, composed of 'neighbors' array and 'routingTable' LL
 
     //private byte[] reveivedBytes = new byte[1024];
     private DatagramPacket packet;
+    Thread t1;
 
     public static void main(String[] args) {
 
-        if (args.length != 1) {
+        if (args.length != 2) {
             System.out.println("Argument Error");
         } else {
+        	
             classInstance = new Router5002();
             classInstance.setupConstants(args);
-            classInstance.readAndSend(); // initial read and send call
-            classInstance.listenAndUpdate(); // recursive call, calls readAndSend()
+            classInstance.readAndSend(changed, null,null);// initial read and send call
+            
+            Timer timer = new Timer();
+            TimerTask task = new TimerTask() {
+				
+				@Override
+				public void run() {
+					System.out.println("\n\n\n************************************Timeout**************\n\n\n\n");
+					Scanner scanner ;
+			        String content; // holds file input for parsing
+			        boolean neighborLine = true; // marks first file line which is a list of neighbor nodes
+			        String routingTableEntry[];
+			        String currentFileContent = "";
+					try{
+					 	scanner = new Scanner(new File(initialFile));
+				         // individual routing table entry, (destination, cost, next hop)
+				        System.out.println("Timeout");
+				        while (scanner.hasNextLine()){
+				        	currentFileContent = currentFileContent+"\n"+scanner.nextLine(); // reads individual line
+				        }
+				        if(!currentFileContent.equalsIgnoreCase(initialFileContent))
+				        {
+				        	System.out.println("File Changed : "+currentFileContent);
+				        	initialFileContent = currentFileContent;
+				        	File file = new File(filename);
+		                    BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file, false));
+
+		                    // write neighbors line
+		                    bufferedWriter.write(initialFileContent.trim().toString());
+		                    bufferedWriter.close();
+		                    changed = true;
+		                    classInstance.readAndSend(changed,null,null);
+		                    
+				        }
+				        
+				        
+					}catch(Exception e)
+					{
+						System.out.println("File not found"+e);
+					}
+				}
+			};
+			timer.schedule(task, 15000, 15000);
+			classInstance.callThread();// recursive call, calls readAndSend()
+			classInstance.readAndSend(changed,null,null);
         }
     }
 
@@ -39,6 +94,7 @@ public class Router5002 {//NEW CLASS CHANGE
         try {
             socket = new DatagramSocket(hostPort);
             localhost = InetAddress.getLocalHost();
+            
         } catch (SocketException e) {
             e.printStackTrace();
         } catch (UnknownHostException e) {
@@ -47,217 +103,340 @@ public class Router5002 {//NEW CLASS CHANGE
 
         //setup router I/O file
         filename = args[0];
+        initialFile = args[1];
+        
+        Scanner scanner;
+		try {
+			scanner = new Scanner(new File(initialFile));
+		
+	        String content; // holds file input for parsing
+	        boolean neighborLine = true; // marks first file line which is a list of neighbor nodes
+	        String routingTableEntry[]; // individual routing table entry, (destination, cost, next hop)
+	        initialFileContent="";
+	        while (scanner.hasNextLine()){
+	        	initialFileContent=initialFileContent+"\n"+scanner.nextLine(); // reads individual line
+	        }
+	        System.out.println("Initial File : "+initialFileContent);
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			System.out.println("File Not found"+e);
+		}
+        
     }
 
-    private void readAndSend() {
-
+    private void readAndSend(boolean flag, String senderport,String portsSent) {
+    	String content=""; // holds file input for parsing
+        
+    	String firstline="";
         try {
 
-            Thread.sleep(10000); // 5 second pause before read and send
+            //Thread.sleep(10000); // 10 second pause before read and send
 
             System.out.println();
             System.out.println("**********READ AND SEND BEGIN");
             Scanner scanner = new Scanner(new File(filename));
-            String content; // holds file input for parsing
+            
             boolean neighborLine = true; // marks first file line which is a list of neighbor nodes
             String routingTableEntry[]; // individual routing table entry, (destination, cost, next hop)
 
             while (scanner.hasNextLine()){
                 content = scanner.nextLine(); // reads individual line
+                System.out.println("Contents : "+content);
 
-                if (neighborLine){// first line is neighbor line
-                    neighbors = content.split(",");
-                    neighborLine = false;
-                }else {// remaining lines are individual table entries
-                    routingTableEntry = content.split(",");
-                    routingTable.add(routingTableEntry);
-                }
+	               	String[] line = content.split(",");
+                	neighbors = line[0].split(":");
+                	for(int i=1;i<line.length;i++){
+                		routingTableEntry = line[i].split(":");
+                		routingTable.add(routingTableEntry);
+                	}
+                
             }
-
+            
             routerNode = new RouterNode(neighbors, routingTable);
             routingTable = new LinkedList<>();// reset or carry over will occur
 
         } catch (FileNotFoundException e) {
             e.printStackTrace();
-        } catch (InterruptedException e) {
+        }/* catch (InterruptedException e) {
             e.printStackTrace();
-        }
-
+        }*/
+        ArrayList<String> neig;
         // cycles neighbors and sends them distance vector values
-        for (int i = 0; i < routerNode.getNeighbors().length; i++){
-
-            // simply converts neighbor entry from string to int, used as packet argument
-            int port = Integer.parseInt(neighbors[i]);
-
-            // this returns destination and cost of each entry in the routing table, then sends to neighbors
-            String message = routerNode.getDistanceVectorValues(routerNode.getRoutingTable());
-            byte messageByte[] = message.getBytes();
-            DatagramPacket packet = new DatagramPacket(messageByte, messageByte.length, localhost, port);
-            try {
-                socket.send(packet);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        if(changed){
+        	
+        	if(portsSent!=null && !portsSent.isEmpty()){
+        		firstline = portsSent.split(",")[0];
+        	}
+        	for(int i=0;i< neighbors.length;i++){
+        		if(firstline!= null &&  !firstline.isEmpty() && !firstline.equalsIgnoreCase("")){
+        			if(!firstline.contains(neighbors[i].toString())){
+	        			String mcontent=firstline+":"+content.toString();
+			        	String message = String.valueOf(changed)+"//"+mcontent.toString();
+			            byte messageByte[] = message.getBytes();
+			            System.out.println("first line : "+firstline);
+			            System.out.println("Sending to neighbour: "+neighbors[i].toString());
+			            DatagramPacket packet = new DatagramPacket(messageByte, messageByte.length, localhost, Integer.parseInt(neighbors[i].toString()));
+			            try {
+			                socket.send(packet);
+			            } catch (IOException e) {
+			                e.printStackTrace();
+			            }
+        			}
+        		}
+        		else{
+        			String message = String.valueOf(changed)+"//"+content.toString();
+		            byte messageByte[] = message.getBytes();
+		            System.out.println("first line : "+firstline);
+		            System.out.println("Sending to neighbour: "+neighbors[i].toString());
+		            DatagramPacket packet = new DatagramPacket(messageByte, messageByte.length, localhost, Integer.parseInt(neighbors[i].toString()));
+		            try {
+		                socket.send(packet);
+		            } catch (IOException e) {
+		                e.printStackTrace();
+		            }
+        		}
+        	}
+        	changed = false;
+        	
+        	Timer timer = new Timer();
+            TimerTask task1 = new TimerTask() {
+				
+				@Override
+				public void run() {
+					for (int i = 0; i < routerNode.getNeighbors().length; i++){
+						
+			            // simply converts neighbor entry from string to int, used as packet argument
+			        	
+				            int port = Integer.parseInt(neighbors[i]);
+				
+				            // this returns destination and cost of each entry in the routing table, then sends to neighbors
+				            System.out.println("Sending After timeout");
+				            String routingTable = routerNode.getDistanceVectorValues(routerNode.getRoutingTable());
+				            changed=false;
+				            String message = String.valueOf(changed)+"//"+routingTable.toString();
+				            byte messageByte[] = message.getBytes();
+				            DatagramPacket packet = new DatagramPacket(messageByte, messageByte.length, localhost, port);
+				            try {
+				                socket.send(packet);
+				            } catch (IOException e) {
+				                e.printStackTrace();
+				            }
+			        }
+					
+				}
+			};
+			timer.schedule(task1, 15000);
+        	
+        }else{
+	        for (int i = 0; i < routerNode.getNeighbors().length; i++){
+	
+	            // simply converts neighbor entry from string to int, used as packet argument
+	        	
+		            int port = Integer.parseInt(neighbors[i]);
+		
+		            // this returns destination and cost of each entry in the routing table, then sends to neighbors
+		            String routingTable = routerNode.getDistanceVectorValues(routerNode.getRoutingTable());
+		            String message = String.valueOf(changed)+"//"+routingTable.toString();
+		            byte messageByte[] = message.getBytes();
+		            DatagramPacket packet = new DatagramPacket(messageByte, messageByte.length, localhost, port);
+		            try {
+		                socket.send(packet);
+		            } catch (IOException e) {
+		                e.printStackTrace();
+		            }
+	        }
         }
         System.out.println("**********READ AND SEND END");
     }
+    
+    private void callThread() {
+		
+    	Reciever myServer = new Reciever();
+    	t1 = new Thread(myServer, "T1");
+        t1.start();
+	}
 
-    private void listenAndUpdate() {
+    class Reciever implements Runnable{
 
-        while (true){
-            try {
-            	byte[] reveivedBytes = new byte[1024];
-                packet = new DatagramPacket(reveivedBytes, reveivedBytes.length);
-                socket.receive(packet);
-                String receivedString = new String(packet.getData());
+		@Override
+		public void run() {
+			 while (true){
+		            try {
+		            	byte[] reveivedBytes = new byte[1024];
+		                packet = new DatagramPacket(reveivedBytes, reveivedBytes.length);// received packet
+		                socket.receive(packet);
+		                String senderPortString = String.valueOf(packet.getPort()); // used to identify redundant vector comparisons
+		                String hostPortString = String.valueOf(hostPort);// used to identify redundant vector comparisons
+		                String fullData = new String(packet.getData());
+		                String hasChanged = fullData.split("//")[0];
+		                
+		                if(hasChanged.equals(String.valueOf((boolean) true))){
+		                	File file = new File(filename);
+		                    BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file, false));
 
-                System.out.println();
-                System.out.println("**********LISTEN AND UPDATE BEGIN");
+		                    // write neighbors line
+		                    bufferedWriter.write(initialFileContent.toString().trim());
+		                    bufferedWriter.close();
+		                    changed = true;
+		                    classInstance.readAndSend(changed, senderPortString,fullData.split("//")[1]);
+		                    
+		                }else {
+		                	String receivedString = fullData.split("//")[1];
+		                System.out.println();
+		                System.out.println("**********LISTEN AND UPDATE BEGIN");
 
-                String senderPortString = String.valueOf(packet.getPort()); // used to identify redundant vector comparisons
-                String hostPortString = String.valueOf(hostPort);
+		              
 
-                //System.out.println("Sender - Host: " + senderPortString + " - " + hostPortString);
-                System.out.println("REcieved String : " +receivedString);
-                String[] vectorValue = receivedString.split(",");
-                //System.out.println("vectorValue: " +);
-                // holds only pertinent vector values., i.e. not sender or self
-                LinkedList<String> vectorValueLean = new LinkedList<>();
+		                //System.out.println("Sender - Host: " + senderPortString + " - " + hostPortString);
 
-                System.out.println();
-                System.out.println("BUILDING LEAN FROM SENDER " + packet.getPort());
-                for (int i = 0; i < vectorValue.length; i++){
-                    System.out.print("Vector Value - " + vectorValue[i]);
+		                String[] vectorValue = receivedString.split(",");
+		                //System.out.println("vectorValue: " +);
+		                // holds only pertinent vector values., i.e. not sender or self
+		                LinkedList<String> vectorValueLean = new LinkedList<>();
 
-                    // split and set destination and cost variables
-                    String tempString = vectorValue[i];
-                    String[] tempArray = tempString.split(":");
-                    String destination = tempArray[0];
-                    String cost = tempArray[1];
-                    String nexthop = tempArray[2];
-                    //System.out.println("Destination: " + destination);
-                    //System.out.println("Cost " + cost);
+		                System.out.println();
+		                System.out.println("BUILDING LEAN FROM SENDER " + packet.getPort());// Lean is LL with pertinent values only
+		                for (int i = 0; i < vectorValue.length; i++){
+		                    System.out.print("Vector Value - " + vectorValue[i]);
 
-                    // if destination isn't the sender or host, add to lean
-                    if (destination.equals(senderPortString) || destination.equals(hostPortString)){
-                        System.out.println(" Redundant, Not Added To Lean");
-                    }else {
-                        vectorValueLean.add(destination + ":" + cost+":"+nexthop);
-                        System.out.println(" Added To Lean");
-                    }
-                }
+		                    // split and set destination and cost variables
+		                    // refer to formatting from getDistanceVectorValues
+		                    String tempString = vectorValue[i];
+		                    String[] tempArray = tempString.split(":");
+		                    String destination = tempArray[0];
+		                    String cost = tempArray[1];
+		                    String nexthop = tempArray[2];
+		                    //System.out.println("Destination: " + destination);
+		                    //System.out.println("Cost " + cost);
 
-                // read and make node object for comparision
-                Scanner scanner = new Scanner(new File(filename));
-                String content; // holds file input for parsing
-                boolean neighborLine = true; // marks first file line which is a list of neighbor nodes
-                String routingTableEntry[]; // individual routing table entry, (destination, cost, next hop)
+		                    // if destination isn't the sender or host, add to lean
+		                    /*if (destination.equals(senderPortString) || destination.equals(hostPortString)){
+		                        System.out.println(" Redundant, Not Added To Lean");
+		                    }else {*/
+		                        vectorValueLean.add(destination + ":" + cost+":"+nexthop);
+		                        System.out.println(" Added To Lean");
+		                    //}
+		                }
 
-                while (scanner.hasNextLine()){
-                    content = scanner.nextLine(); // reads individual line
+		                // read and make node object for comparision
+		                Scanner scanner = new Scanner(new File(filename));
+		                String content; // holds file input for parsing
+		                boolean neighborLine = true; // marks first file line which is a list of neighbor nodes
+		                String routingTableEntry[]; // individual routing table entry, (destination, cost, next hop)
 
-                    // this is keep for writing back to file later
-                    if (neighborLine){// first line is neighbor line
-                        neighbors = content.split(",");
-                        neighborLine = false;
-                    }else {// table entries which are analyzed and possibly updated with dvr algo
-                        routingTableEntry = content.split(",");
-                        routingTable.add(routingTableEntry);
-                    }
-                }
-                routerNode = new RouterNode(neighbors, routingTable);
+		                while (scanner.hasNextLine()){
+		                    content = scanner.nextLine(); // reads individual line
+		                    System.out.println("Contents : "+content);
 
-                // perform route comparision calculations and update routing table in routerNode object if needed
-                boolean updateNeed = false; // flag for file re-write
-                System.out.println();
-                System.out.println("UPDATE CALCULATIONS");
-                for (int i =0; i < vectorValueLean.size(); i++){
-                    String[] temp = vectorValueLean.get(i).split(":");
+		    	               	String[] line = content.split(",");
+		                    	neighbors = line[0].split(":");
+		                    	for(int i=1;i<line.length;i++){
+		                    		routingTableEntry = line[i].split(":");
+		                    		routingTable.add(routingTableEntry);
+		                    	}
+		                    
+		                }
+		                routerNode = new RouterNode(neighbors, routingTable);
 
-                    // this is how 'fast' the host node can get to the sending node
-                    String costAndNextHop = routerNode.getCost(senderPortString);
-                		  
-                    String currentCostToSendingNode = costAndNextHop.split(":")[0];
-                    String currentNexthopToSendingNode = costAndNextHop.split(":")[1];
-                    // this is how 'fast' the sending node can get to the destination in question
-                    String tempDestination = temp[0];
-                    String tempCost = temp[1].trim();
-                    String tempNexHtop = temp[2].trim();
+		                // perform route comparision calculations and update routing table in routerNode object if needed
+		                boolean updateNeed = false; // flag for file re-write
+		                System.out.println();
+		                System.out.println("UPDATE CALCULATIONS");
+		                for (int i =0; i < vectorValueLean.size(); i++){
+		                    String[] temp = vectorValueLean.get(i).split(":");
 
-                    // this is how 'fast' the host node can currently get to the same destination
-                    String currentCostToTempDestination = routerNode.getCost(tempDestination).split(":")[0];
+		                    // this is how 'fast' the host node can get to the sending node
+		                    String costAndNextHop = routerNode.getCost(senderPortString);
+		                		  
+		                    String currentCostToSendingNode = costAndNextHop.split(":")[0];
+		                    String currentNexthopToSendingNode = costAndNextHop.split(":")[1];
+		                    // this is how 'fast' the sending node can get to the destination in question
+		                    String tempDestination = temp[0];
+		                    String tempCost = temp[1].trim();
+		                    String tempNexHtop = temp[2].trim();
 
-                    /*
-                    If the cost from 5002 to the sending node plus the cost from the sending node to
-                    the destination in question is < the current cost from 5002 to the destination,
-                    update 5002 routing table by updating routerNode object. Then use routerNode as template
-                    for new file.
-                    */
+		                    // this is how 'fast' the host node can currently get to the same destination
+		                    String currentCostToTempDestination = routerNode.getCost(tempDestination).split(":")[0];
 
-                    //System.out.println("COMPARISION");
-                    System.out.println("Is " + currentCostToSendingNode + " + " + tempCost + " < " + currentCostToTempDestination + "?");
-                    int cctsn = Integer.parseInt(currentCostToSendingNode);
-                    int tc = Integer.parseInt(tempCost);
-                    int ccttd = Integer.parseInt(currentCostToTempDestination);
+		                    /*
+		                    If the cost from 5002 to the sending node plus the cost from the sending node to
+		                    the destination in question is < the current cost from 5002 to the destination,
+		                    update 5002 routing table by updating routerNode object. Then use routerNode as template
+		                    for new file.
+		                    */
 
-                    if (cctsn + tc <= ccttd){
-                        updateNeed = true;
+		                    //System.out.println("COMPARISION");
+		                    System.out.println("Is " + currentCostToSendingNode + " + " + tempCost + " < " + currentCostToTempDestination + "?");
+		                    int cctsn = Integer.parseInt(currentCostToSendingNode);
+		                    int tc = Integer.parseInt(tempCost);
+		                    int ccttd = Integer.parseInt(currentCostToTempDestination);
 
-                        //update with [tempDestination, cctsn + tc, sendingNode]
-                        String[] newDistanceVectorEntry = {tempDestination, String.valueOf(cctsn+tc), currentNexthopToSendingNode};
-                        routerNode.updateDistanceVectorEntry(newDistanceVectorEntry);
-                    }
-                }
+		                    if (cctsn + tc < ccttd){
+		                        updateNeed = true;
 
-                if (updateNeed){
-                    // write file back
-                    System.out.println();
-                    System.out.println("WRITING BACK");
-                    File file = new File(filename);
-                    //FileWriter fileWriter = new FileWriter(file, false);
-                    BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file, false));
+		                        //update with [tempDestination, cctsn + tc, sendingNode]
+		                        String[] newDistanceVectorEntry = {tempDestination, String.valueOf(cctsn+tc), currentNexthopToSendingNode};
+		                        routerNode.updateDistanceVectorEntry(newDistanceVectorEntry);
+		                    }
+		                }
 
-                    // write neighbors line
-                    neighbors = routerNode.getNeighbors();
-                    StringBuilder sbNeighbors = new StringBuilder();
-                    for (int i = 0; i < neighbors.length; i++){
-                        if (i != neighbors.length - 1){
-                            sbNeighbors.append(neighbors[i] + ",");
-                        }else {
-                            sbNeighbors.append(neighbors[i]);
-                        }
-                    }
-                    bufferedWriter.write(sbNeighbors.toString());
-                    bufferedWriter.newLine();
+		                if (updateNeed){
+		                    // write file back
+		                    System.out.println();
+		                    System.out.println("WRITING BACK");
+		                    File file = new File(filename);
+		                    BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file, false));
 
-                    // write routing table
-                    routingTable = routerNode.getRoutingTable();
-                    for (int i = 0; i < routingTable.size(); i++){
-                        StringBuilder sbTableEntry = new StringBuilder();
-                        String[] temp = routingTable.get(i);
-                        for (int j = 0; j < temp.length; j++){
-                            if (j != temp.length - 1){
-                                sbTableEntry.append(temp[j] + ",");
-                            }else {
-                                sbTableEntry.append(temp[j]);
-                            }
-                        }
-                        bufferedWriter.write(sbTableEntry.toString());
-                        bufferedWriter.newLine();
-                    }
-                    bufferedWriter.close();
-                }
+		                    // write neighbors line
+		                    neighbors = routerNode.getNeighbors();
+		                    StringBuilder sbNeighbors = new StringBuilder();
+		                    for (int i = 0; i < neighbors.length; i++){
+		                        if (i != neighbors.length - 1){
+		                            sbNeighbors.append(neighbors[i] + ":");
+		                        }else {
+		                            sbNeighbors.append(neighbors[i]+",");
+		                        }
+		                    }
+		                    bufferedWriter.write(sbNeighbors.toString());
+		                   
 
-                routingTable = new LinkedList<>();// reset or carry over will occur
+		                    // write routing table
+		                    // CONCERN: this may be the problem area
+		                    routingTable = routerNode.getRoutingTable();
+		                    for (int i = 0; i < routingTable.size(); i++){
+		                        StringBuilder sbTableEntry = new StringBuilder();
+		                        String[] temp = routingTable.get(i);
+		                        for (int j = 0; j < temp.length; j++){
+		                            if (j != temp.length - 1){
+		                                sbTableEntry.append(temp[j] + ":");
+		                            }else {
+		                                sbTableEntry.append(temp[j]+",");
+		                            }
+		                        }
+		                        bufferedWriter.write(sbTableEntry.toString());
+		                       
+		                    }
+		                    bufferedWriter.close();
+		                    classInstance.readAndSend(changed,null,null);
+		                }
 
-                System.out.println();
-                System.out.println("**********LISTEN AND UPDATE END");
+		                routingTable = new LinkedList<>();// reset or carry over will occur
+		                updateNeed = false;
+		                System.out.println();
+		                System.out.println("**********LISTEN AND UPDATE END");
 
-                classInstance.readAndSend();
+		               
 
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+		                } 
+		            }catch (IOException e) {
+		                e.printStackTrace();
+		            }
+		            
+		        }
+			
+		}
+    	
+    	
     }
+    
 }
